@@ -7,3 +7,13 @@ __pycache__/
 *.pyz
 *.pywz
 *.pyzw
+
+# Virtual environments
+venv/
+
+# Uploads or media
+uploads/
+
+# VSCode or PyCharm
+.vscode/
+.idea/
