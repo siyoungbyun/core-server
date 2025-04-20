@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from modules.upload.router import router as upload_router
 from core.database import Base, engine
+from models.video import Video
+from models.transcript import Transcript
 
 app = FastAPI(
     title="Lecture QA Platform API",
