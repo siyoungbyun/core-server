@@ -1,12 +1,12 @@
 from fastapi import UploadFile, BackgroundTasks
-import uuid
 from .repository import UploadRepository
 from .constants import ProcessingStatus
+from core.embedding import embedding_model
 from utils.stt_processor import process_video_to_text
+from modules.rag.service import RAGService
 import os
 import logging
 import time
-import threading
 from typing import Dict, Any, Set
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,8 @@ cancelled_tasks: Set[int] = set()
 class UploadService:
     def __init__(self):
         self.repository = UploadRepository()
+        self.embedding_model = embedding_model
+        self.rag_service = RAGService()
 
     async def process_video_upload(
         self,
@@ -62,9 +64,9 @@ class UploadService:
         
         return {"video_id": str(video_id)}
 
-    def _process_video_transcript(self, video_id: int, file_path: str):
+    async def _process_video_transcript(self, video_id: int, file_path: str):
         """
-        비디오 파일을 처리하여 텍스트로 변환하는 백그라운드 작업
+        비디오 파일을 처리하여 텍스트로 변환하고 RAG 문서로 저장하는 백그라운드 작업
         """
         try:
             # 작업 시작 상태 업데이트
@@ -107,16 +109,34 @@ class UploadService:
             log_msg = f"[STT] 텍스트 변환 완료: {len(full_text)} 문자"
             logger.info(log_msg)
             background_tasks_status[video_id]["log_messages"].append(log_msg)
-            background_tasks_status[video_id]["progress"] = 80
+            background_tasks_status[video_id]["progress"] = 50
             
             # 데이터베이스에 저장
-            self.repository.update_video_transcript(video_id, full_text)
+            video = self.repository.update_video_transcript(video_id, full_text)
+            if not video:
+                raise ValueError(f"Video with id {video_id} not found")
+            
+            # RAG 문서 처리 시작
+            log_msg = f"[RAG] 문서 처리 시작..."
+            logger.info(log_msg)
+            background_tasks_status[video_id]["log_messages"].append(log_msg)
+            background_tasks_status[video_id]["progress"] = 60
+            
+            # RAG 문서 생성
+            await self.rag_service.process_document(
+                title=video.title,
+                content=full_text
+            )
+            
+            log_msg = f"[RAG] 문서 처리 완료"
+            logger.info(log_msg)
+            background_tasks_status[video_id]["log_messages"].append(log_msg)
+            background_tasks_status[video_id]["progress"] = 100
             
             log_msg = f"[STT] 비디오 처리 완료 (ID: {video_id})"
             logger.info(log_msg)
             background_tasks_status[video_id]["log_messages"].append(log_msg)
             background_tasks_status[video_id]["status"] = "completed"
-            background_tasks_status[video_id]["progress"] = 100
             background_tasks_status[video_id]["last_update"] = time.time()
             
             # 취소 목록에서 제거 (만약 있다면)

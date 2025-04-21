@@ -4,6 +4,7 @@ from modules.upload.router import router as upload_router
 from core.database import Base, engine
 from models.video import Video
 from models.transcript import Transcript
+from models.rag import RAGDocument
 
 app = FastAPI(
     title="Lecture QA Platform API",
